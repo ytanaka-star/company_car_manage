@@ -1,0 +1,730 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#1a1f2e">
+<title>社用車管理</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0f1319;
+    --surface: #1a1f2e;
+    --surface2: #232a3b;
+    --border: #2d3448;
+    --accent: #4f8ef7;
+    --accent2: #38d9a9;
+    --warn: #ff6b6b;
+    --text: #e8eaf0;
+    --text2: #8891aa;
+    --text3: #545d78;
+    --radius: 14px;
+    --transition: 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+
+  body {
+    font-family: 'Noto Sans JP', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100dvh;
+    overflow-x: hidden;
+  }
+
+  /* ── ローディング ── */
+  .loading-overlay {
+    position: fixed; inset: 0; background: var(--bg);
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    z-index: 999; gap: 16px;
+  }
+  .loading-overlay.hidden { display: none; }
+  .spinner {
+    width: 36px; height: 36px; border: 3px solid var(--border);
+    border-top-color: var(--accent); border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .loading-text { font-size: 13px; color: var(--text3); }
+
+  /* ── ナビゲーション ── */
+  .nav {
+    position: fixed; bottom: 0; left: 0; right: 0;
+    background: var(--surface); border-top: 1px solid var(--border);
+    display: flex; z-index: 100;
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  .nav-btn {
+    flex: 1; display: flex; flex-direction: column; align-items: center;
+    gap: 4px; padding: 10px 8px; cursor: pointer;
+    background: none; border: none; color: var(--text3);
+    font-family: inherit; font-size: 10px; font-weight: 500;
+    transition: color var(--transition);
+  }
+  .nav-btn.active { color: var(--accent); }
+  .nav-btn svg { width: 22px; height: 22px; }
+
+  /* ── スクリーン ── */
+  .screen { display: none; padding: 20px 16px 100px; min-height: 100dvh; }
+  .screen.active { display: block; }
+
+  /* ── ヘッダー ── */
+  .header {
+    padding: 52px 16px 20px; position: sticky; top: 0; z-index: 10;
+    background: linear-gradient(to bottom, var(--bg) 70%, transparent);
+  }
+  .header-label { font-size: 11px; color: var(--text3); letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 4px; }
+  .header-title { font-size: 26px; font-weight: 700; letter-spacing: -0.02em; }
+
+  /* ── カード ── */
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; margin-bottom: 12px; }
+  .card-label { font-size: 11px; color: var(--text3); letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 10px; font-weight: 500; }
+
+  /* ── 車両ボタン ── */
+  .vehicle-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 12px; }
+  .vehicle-btn {
+    background: var(--surface2); border: 2px solid var(--border); border-radius: 12px; padding: 14px 10px;
+    display: flex; flex-direction: column; align-items: center; gap: 6px;
+    cursor: pointer; transition: all var(--transition); color: var(--text2); font-family: inherit;
+  }
+  .vehicle-btn .v-icon { font-size: 14px; }
+  .vehicle-btn .v-name { font-size: 13px; font-weight: 600; color: var(--text); }
+  .vehicle-btn .v-km { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--text3); }
+  .vehicle-btn.selected { border-color: var(--accent); background: rgba(79, 142, 247, 0.12); color: var(--accent); }
+  .vehicle-btn:active { transform: scale(0.97); }
+
+  /* ── ユーザーリスト ── */
+  .user-list { display: flex; flex-wrap: wrap; gap: 8px; }
+  .user-chip {
+    background: var(--surface2); border: 1.5px solid var(--border); border-radius: 20px; padding: 7px 14px;
+    font-size: 13px; font-weight: 500; cursor: pointer; transition: all var(--transition);
+    color: var(--text2); font-family: inherit;
+  }
+  .user-chip.selected { border-color: var(--accent2); background: rgba(56, 217, 169, 0.12); color: var(--accent2); }
+  .user-chip:active { transform: scale(0.95); }
+
+  /* ── 入力フィールド ── */
+  .input-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .input-group { display: flex; flex-direction: column; gap: 6px; }
+  .input-label { font-size: 11px; color: var(--text3); font-weight: 500; }
+  .input-field {
+    background: var(--surface2); border: 1.5px solid var(--border); border-radius: 10px;
+    padding: 12px; color: var(--text); font-family: 'DM Mono', monospace; font-size: 15px;
+    width: 100%; transition: border-color var(--transition); -webkit-appearance: none;
+  }
+  .input-field:focus { outline: none; border-color: var(--accent); }
+  .input-field::placeholder { color: var(--text3); }
+  textarea.input-field { font-family: 'Noto Sans JP', sans-serif; font-size: 14px; resize: none; height: 90px; line-height: 1.6; }
+
+  /* ── トグル ── */
+  .toggle-row { display: flex; align-items: center; justify-content: space-between; padding: 4px 0; }
+  .toggle-label { font-size: 14px; font-weight: 500; }
+  .toggle {
+    width: 46px; height: 26px; background: var(--border); border-radius: 13px;
+    cursor: pointer; position: relative; transition: background var(--transition); border: none; flex-shrink: 0;
+  }
+  .toggle::after {
+    content: ''; position: absolute; width: 20px; height: 20px; background: white;
+    border-radius: 50%; top: 3px; left: 3px; transition: transform var(--transition);
+    box-shadow: 0 1px 4px rgba(0,0,0,0.4);
+  }
+  .toggle.on { background: var(--warn); }
+  .toggle.on.green { background: var(--accent2); }
+  .toggle.on::after { transform: translateX(20px); }
+
+  /* ── 送信ボタン ── */
+  .submit-btn {
+    width: 100%; padding: 16px; background: var(--accent); border: none; border-radius: 12px;
+    color: white; font-family: inherit; font-size: 15px; font-weight: 700;
+    cursor: pointer; transition: all var(--transition); letter-spacing: 0.03em;
+  }
+  .submit-btn:active { transform: scale(0.98); opacity: 0.9; }
+  .submit-btn:disabled { background: var(--border); color: var(--text3); cursor: not-allowed; }
+
+  /* ── 履歴 ── */
+  .history-item {
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 14px 16px; margin-bottom: 10px; transition: border-color var(--transition);
+  }
+  .h-top { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; }
+  .h-vehicle { font-size: 15px; font-weight: 700; }
+  .h-date { font-size: 11px; color: var(--text3); font-family: 'DM Mono', monospace; }
+  .h-meta { display: flex; gap: 10px; flex-wrap: wrap; }
+  .h-chip { font-size: 11px; padding: 3px 9px; border-radius: 20px; background: var(--surface2); color: var(--text2); font-weight: 500; }
+  .h-chip.warn { background: rgba(255,107,107,0.15); color: var(--warn); }
+  .h-km { font-family: 'DM Mono', monospace; font-size: 13px; color: var(--accent); margin-top: 6px; }
+
+  /* ── フィルター ── */
+  .filter-row { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; margin-bottom: 12px; }
+  .filter-row::-webkit-scrollbar { display: none; }
+  .filter-chip {
+    white-space: nowrap; padding: 7px 14px; border-radius: 20px;
+    background: var(--surface); border: 1.5px solid var(--border);
+    color: var(--text2); font-size: 12px; font-weight: 500;
+    cursor: pointer; font-family: inherit; transition: all var(--transition); flex-shrink: 0;
+  }
+  .filter-chip.active { background: rgba(79, 142, 247, 0.15); border-color: var(--accent); color: var(--accent); }
+
+  /* ── 管理 ── */
+  .section-title { font-size: 13px; font-weight: 700; color: var(--text2); letter-spacing: 0.06em; margin: 20px 0 10px; text-transform: uppercase; }
+  .list-item {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 12px 14px; background: var(--surface); border: 1px solid var(--border);
+    border-radius: 10px; margin-bottom: 8px;
+  }
+  .list-item-name { font-size: 14px; font-weight: 500; }
+  .delete-btn {
+    width: 28px; height: 28px; border-radius: 8px; background: rgba(255,107,107,0.1);
+    border: none; color: var(--warn); cursor: pointer; font-size: 16px;
+    display: flex; align-items: center; justify-content: center; transition: background var(--transition);
+  }
+  .delete-btn:active { background: rgba(255,107,107,0.25); }
+  .edit-btn {
+    width: 28px; height: 28px; border-radius: 8px; background: rgba(79,142,247,0.1);
+    border: none; color: var(--accent); cursor: pointer; font-size: 14px;
+    display: flex; align-items: center; justify-content: center; transition: background var(--transition);
+  }
+  .edit-btn:active { background: rgba(79,142,247,0.25); }
+  .add-row { display: flex; gap: 8px; }
+  .add-input {
+    flex: 1; background: var(--surface2); border: 1.5px solid var(--border);
+    border-radius: 10px; padding: 11px 14px; color: var(--text);
+    font-family: 'Noto Sans JP', sans-serif; font-size: 14px;
+  }
+  .add-input:focus { outline: none; border-color: var(--accent); }
+  .add-btn {
+    padding: 11px 18px; background: var(--accent); border: none; border-radius: 10px;
+    color: white; font-size: 14px; font-weight: 700; cursor: pointer; font-family: inherit; white-space: nowrap;
+  }
+
+  /* ── トースト ── */
+  .toast {
+    position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%) translateY(20px);
+    background: var(--surface2); border: 1px solid var(--border);
+    padding: 12px 22px; border-radius: 100px; font-size: 13px; font-weight: 500;
+    opacity: 0; transition: all 0.3s; z-index: 200; white-space: nowrap;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+  }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  /* ── 空状態 ── */
+  .empty { text-align: center; padding: 60px 20px; color: var(--text3); font-size: 14px; }
+
+  /* ── 走行距離サマリー ── */
+  .stat-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 16px; }
+  .stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px; }
+  .stat-label { font-size: 10px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 6px; }
+  .stat-value { font-family: 'DM Mono', monospace; font-size: 22px; font-weight: 500; color: var(--accent); }
+  .stat-unit { font-size: 11px; color: var(--text3); }
+</style>
+</head>
+<body>
+
+<!-- ── ローディング ── -->
+<div class="loading-overlay" id="loading-overlay">
+  <div class="spinner"></div>
+  <div class="loading-text">データを読み込んでいます…</div>
+</div>
+
+<!-- ── 入力画面 ── -->
+<div class="screen active" id="screen-input">
+  <div class="header">
+    <div class="header-label">社用車管理</div>
+    <div class="header-title">運行記録</div>
+  </div>
+
+  <div class="card">
+    <div class="card-label">車両を選択</div>
+    <div class="vehicle-grid" id="vehicle-grid"></div>
+  </div>
+
+  <div class="card">
+    <div class="card-label">使用者</div>
+    <div class="user-list" id="user-list"></div>
+  </div>
+
+  <div class="card">
+    <div class="card-label">使用時刻</div>
+    <div class="input-row">
+      <div class="input-group">
+        <div class="input-label">開始</div>
+        <input class="input-field" type="time" id="time-start">
+      </div>
+      <div class="input-group">
+        <div class="input-label">終了</div>
+        <input class="input-field" type="time" id="time-end">
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-label">オドメーター（km）</div>
+    <div class="input-row">
+      <div class="input-group">
+        <div class="input-label">出発時</div>
+        <input class="input-field" type="number" inputmode="numeric" id="odo-start" placeholder="12345">
+      </div>
+      <div class="input-group">
+        <div class="input-label">帰着時</div>
+        <input class="input-field" type="number" inputmode="numeric" id="odo-end" placeholder="12360">
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="toggle-row">
+      <span class="toggle-label">🍺 アルコールを摂取していない、及び体調不良ではない</span>
+      <button class="toggle green" id="alcohol-toggle" onclick="toggleAlcohol()"></button>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="toggle-row">
+      <span class="toggle-label">🔧 車両の不具合はない</span>
+      <button class="toggle" id="trouble-toggle" onclick="toggleTrouble()"></button>
+    </div>
+    <div id="trouble-area" style="margin-top:12px; display:none;">
+      <textarea class="input-field" id="trouble-text" placeholder="症状を記入してください…"></textarea>
+    </div>
+  </div>
+
+  <button class="submit-btn" id="submit-btn" onclick="submitRecord()">記録を保存</button>
+</div>
+
+<!-- ── 履歴画面 ── -->
+<div class="screen" id="screen-history">
+  <div class="header">
+    <div class="header-label">社用車管理</div>
+    <div class="header-title">履歴</div>
+  </div>
+  <div class="stat-grid" id="stat-grid"></div>
+  <div class="filter-row" id="filter-row"></div>
+  <div id="history-list"></div>
+</div>
+
+<!-- ── 設定画面 ── -->
+<div class="screen" id="screen-settings">
+  <div class="header">
+    <div class="header-label">社用車管理</div>
+    <div class="header-title">設定</div>
+  </div>
+
+  <div class="section-title">車両リスト</div>
+  <div id="vehicle-list-mgmt"></div>
+  <div class="add-row">
+    <input class="add-input" id="new-vehicle" placeholder="車両名（例: プリウス1号）" maxlength="20">
+    <button class="add-btn" onclick="addVehicle()">追加</button>
+  </div>
+
+  <div class="section-title">ユーザーリスト</div>
+  <div id="user-list-mgmt"></div>
+  <div class="add-row">
+    <input class="add-input" id="new-user" placeholder="氏名（例: 田中 太郎）" maxlength="20">
+    <button class="add-btn" onclick="addUser()">追加</button>
+  </div>
+</div>
+
+<!-- ── ナビゲーション ── -->
+<nav class="nav">
+  <button class="nav-btn active" id="nav-input" onclick="showScreen('input')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <path d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
+    </svg>
+    入力
+  </button>
+  <button class="nav-btn" id="nav-history" onclick="showScreen('history')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
+    </svg>
+    履歴
+  </button>
+  <button class="nav-btn" id="nav-settings" onclick="showScreen('settings')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z"/>
+    </svg>
+    設定
+  </button>
+</nav>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ============================================================
+//  アプリ状態
+// ============================================================
+var appData = { vehicles: [], users: [], records: [] };
+
+var selectedVehicle = null;
+var selectedUser    = null;
+var noTrouble       = false;
+var alcoholOk       = false;
+var historyFilter   = 'all';
+
+// ============================================================
+//  起動時: GASからデータ取得
+// ============================================================
+window.addEventListener('load', function() {
+  google.script.run
+    .withSuccessHandler(function(jsonStr) {
+      var res = JSON.parse(jsonStr);
+      if (res.ok) {
+        appData.vehicles = res.vehicles || [];
+        appData.users    = res.users    || [];
+        appData.records  = res.records  || [];
+      } else {
+        showToast('⚠️ データ取得エラー: ' + res.error);
+      }
+      document.getElementById('loading-overlay').classList.add('hidden');
+      renderVehicles();
+      renderUsers();
+    })
+    .withFailureHandler(function(err) {
+      showToast('⚠️ 通信エラー: ' + err.message);
+      document.getElementById('loading-overlay').classList.add('hidden');
+    })
+    .getData();
+});
+
+// ============================================================
+//  入力画面
+// ============================================================
+function renderVehicles() {
+  var grid = document.getElementById('vehicle-grid');
+  grid.innerHTML = appData.vehicles.map(function(v) {
+    var lastRec = null;
+    for (var i = appData.records.length - 1; i >= 0; i--) {
+      if (appData.records[i].vehicle === v) { lastRec = appData.records[i]; break; }
+    }
+    var km  = lastRec ? Number(lastRec.odoEnd).toLocaleString() + ' km' : '—';
+    var sel = selectedVehicle === v ? 'selected' : '';
+    return '<button class="vehicle-btn ' + sel + '" onclick="selectVehicle(\'' + esc(v) + '\')">'
+      + '<span class="v-icon">🚗</span>'
+      + '<span class="v-name">' + v + '</span>'
+      + '<span class="v-km">' + km + '</span>'
+      + '</button>';
+  }).join('');
+}
+
+function renderUsers() {
+  var list = document.getElementById('user-list');
+  list.innerHTML = appData.users.map(function(u) {
+    var sel = selectedUser === u ? 'selected' : '';
+    return '<button class="user-chip ' + sel + '" onclick="selectUser(\'' + esc(u) + '\')">' + u + '</button>';
+  }).join('');
+}
+
+function selectVehicle(v) {
+  selectedVehicle = v;
+  renderVehicles();
+  // 前回終了オドメーターを出発時に自動セット
+  var lastRec = null;
+  for (var i = appData.records.length - 1; i >= 0; i--) {
+    if (appData.records[i].vehicle === v) { lastRec = appData.records[i]; break; }
+  }
+  document.getElementById('odo-start').value = lastRec ? lastRec.odoEnd : '';
+  document.getElementById('odo-end').value   = '';
+}
+
+function selectUser(u) {
+  selectedUser = u;
+  renderUsers();
+}
+
+function toggleAlcohol() {
+  alcoholOk = !alcoholOk;
+  document.getElementById('alcohol-toggle').classList.toggle('on', alcoholOk);
+}
+
+function toggleTrouble() {
+  noTrouble = !noTrouble;
+  document.getElementById('trouble-toggle').classList.toggle('on', noTrouble);
+  document.getElementById('trouble-area').style.display = noTrouble ? 'none' : 'block';
+}
+
+function submitRecord() {
+  var timeStart   = document.getElementById('time-start').value;
+  var timeEnd     = document.getElementById('time-end').value;
+  var odoStart    = parseFloat(document.getElementById('odo-start').value);
+  var odoEnd      = parseFloat(document.getElementById('odo-end').value);
+  var troubleText = document.getElementById('trouble-text').value.trim();
+
+  if (!selectedVehicle)               return showToast('⚠️ 車両を選択してください');
+  if (!selectedUser)                  return showToast('⚠️ 使用者を選択してください');
+  if (!alcoholOk)                     return showToast('⚠️ アルコール・体調確認をチェックしてください');
+  if (!timeStart || !timeEnd)         return showToast('⚠️ 時刻を入力してください');
+  if (isNaN(odoStart) || isNaN(odoEnd)) return showToast('⚠️ オドメーターを入力してください');
+  if (odoEnd < odoStart)              return showToast('⚠️ 帰着時は出発時以上の値を入力してください');
+  if (!noTrouble && !troubleText)     return showToast('⚠️ 不具合の症状を記入してください');
+
+  var rec = {
+    id:          Date.now(),
+    date:        new Date().toLocaleDateString('ja-JP'),
+    vehicle:     selectedVehicle,
+    user:        selectedUser,
+    timeStart:   timeStart,
+    timeEnd:     timeEnd,
+    odoStart:    odoStart,
+    odoEnd:      odoEnd,
+    distance:    odoEnd - odoStart,
+    alcoholOk:   true,
+    trouble:     !noTrouble,
+    troubleText: !noTrouble ? troubleText : ''
+  };
+
+  // ローカル状態に追加
+  appData.records.push(rec);
+
+  // ボタンを無効化して保存中表示
+  var btn = document.getElementById('submit-btn');
+  btn.disabled    = true;
+  btn.textContent = '保存中…';
+
+  // GASに保存
+  google.script.run
+    .withSuccessHandler(function(jsonStr) {
+      var res = JSON.parse(jsonStr);
+      btn.disabled    = false;
+      btn.textContent = '記録を保存';
+      if (res.ok) {
+        resetForm();
+        showToast('✅ 記録を保存しました');
+      } else {
+        // 失敗したらローカルからも除去
+        appData.records.pop();
+        showToast('⚠️ 保存失敗: ' + res.error);
+      }
+    })
+    .withFailureHandler(function(err) {
+      appData.records.pop();
+      btn.disabled    = false;
+      btn.textContent = '記録を保存';
+      showToast('⚠️ 通信エラー: ' + err.message);
+    })
+    .saveRecord(JSON.stringify(rec));
+}
+
+function resetForm() {
+  selectedVehicle = null; selectedUser = null; noTrouble = false; alcoholOk = false;
+  document.getElementById('time-start').value   = '';
+  document.getElementById('time-end').value     = '';
+  document.getElementById('odo-start').value    = '';
+  document.getElementById('odo-end').value      = '';
+  document.getElementById('trouble-text').value = '';
+  document.getElementById('trouble-toggle').classList.remove('on');
+  document.getElementById('alcohol-toggle').classList.remove('on');
+  document.getElementById('trouble-area').style.display = 'none';
+  renderVehicles();
+  renderUsers();
+}
+
+// ============================================================
+//  履歴画面
+// ============================================================
+function renderFilterRow() {
+  var row   = document.getElementById('filter-row');
+  var chips = [
+    filterChip('all',     'すべて'),
+    filterChip('trouble', '🔧 不具合のみ')
+  ].concat(appData.vehicles.map(function(v) {
+    return filterChip(v, '🚗 ' + v);
+  }));
+  row.innerHTML = chips.join('');
+}
+
+function filterChip(value, label) {
+  var active = historyFilter === value ? ' active' : '';
+  return '<button class="filter-chip' + active + '" onclick="setFilter(\'' + esc(value) + '\', this)">' + label + '</button>';
+}
+
+function setFilter(f, el) {
+  historyFilter = f;
+  document.querySelectorAll('.filter-chip').forEach(function(c) { c.classList.remove('active'); });
+  el.classList.add('active');
+  renderHistoryList();
+}
+
+function renderStats() {
+  var grid = document.getElementById('stat-grid');
+  if (!appData.records.length) { grid.innerHTML = ''; return; }
+  var totalKm  = appData.records.reduce(function(s, r) { return s + Number(r.distance); }, 0);
+  var troubles = appData.records.filter(function(r) { return r.trouble; }).length;
+  grid.innerHTML =
+    '<div class="stat-card"><div class="stat-label">総走行距離</div>'
+    + '<div class="stat-value">' + totalKm.toLocaleString() + '<span class="stat-unit"> km</span></div></div>'
+    + '<div class="stat-card"><div class="stat-label">不具合報告</div>'
+    + '<div class="stat-value" style="color:var(--warn)">' + troubles + '<span class="stat-unit"> 件</span></div></div>';
+}
+
+function renderHistoryList() {
+  var list     = document.getElementById('history-list');
+  var filtered = appData.records.slice().reverse();
+  if (historyFilter === 'trouble') {
+    filtered = filtered.filter(function(r) { return r.trouble; });
+  } else if (historyFilter !== 'all') {
+    filtered = filtered.filter(function(r) { return r.vehicle === historyFilter; });
+  }
+  if (!filtered.length) { list.innerHTML = '<div class="empty">記録がありません</div>'; return; }
+  list.innerHTML = filtered.map(function(r) {
+    return '<div class="history-item">'
+      + '<div class="h-top"><div class="h-vehicle">' + r.vehicle + '</div><div class="h-date">' + r.date + '</div></div>'
+      + '<div class="h-meta">'
+      + '<span class="h-chip">👤 ' + r.user + '</span>'
+      + '<span class="h-chip">🕐 ' + r.timeStart + '〜' + r.timeEnd + '</span>'
+      + (r.trouble ? '<span class="h-chip warn">🔧 不具合あり</span>' : '')
+      + '</div>'
+      + '<div class="h-km">+' + Number(r.distance).toLocaleString() + ' km（' + Number(r.odoStart).toLocaleString() + '→' + Number(r.odoEnd).toLocaleString() + '）</div>'
+      + (r.trouble ? '<div style="margin-top:8px;font-size:13px;color:var(--text2);line-height:1.5">' + r.troubleText + '</div>' : '')
+      + '</div>';
+  }).join('');
+}
+
+function renderHistory() {
+  renderStats();
+  renderFilterRow();
+  renderHistoryList();
+}
+
+// ============================================================
+//  設定画面
+// ============================================================
+function renderSettings() {
+  document.getElementById('vehicle-list-mgmt').innerHTML = appData.vehicles.map(function(v, i) {
+    return '<div class="list-item" id="vi-' + i + '">'
+      + '<span class="list-item-name">🚗 ' + v + '</span>'
+      + '<div style="display:flex;gap:6px">'
+      + '<button class="edit-btn" onclick="startEdit(\'vehicle\',' + i + ',\'' + esc(v) + '\')">✏️</button>'
+      + '<button class="delete-btn" onclick="deleteVehicle(' + i + ')">×</button>'
+      + '</div></div>';
+  }).join('');
+
+  document.getElementById('user-list-mgmt').innerHTML = appData.users.map(function(u, i) {
+    return '<div class="list-item" id="ui-' + i + '">'
+      + '<span class="list-item-name">👤 ' + u + '</span>'
+      + '<div style="display:flex;gap:6px">'
+      + '<button class="edit-btn" onclick="startEdit(\'user\',' + i + ',\'' + esc(u) + '\')">✏️</button>'
+      + '<button class="delete-btn" onclick="deleteUser(' + i + ')">×</button>'
+      + '</div></div>';
+  }).join('');
+}
+
+function startEdit(type, i, currentName) {
+  var id = type === 'vehicle' ? 'vi-' + i : 'ui-' + i;
+  var el = document.getElementById(id);
+  el.innerHTML =
+    '<input class="add-input" style="flex:1;font-size:13px;padding:8px 10px" id="edit-input-' + id + '" value="' + currentName + '" maxlength="20">'
+    + '<div style="display:flex;gap:6px">'
+    + '<button class="add-btn" style="padding:8px 14px;font-size:13px" onclick="saveEdit(\'' + type + '\',' + i + ',\'' + id + '\')">保存</button>'
+    + '<button class="delete-btn" style="width:auto;padding:0 10px;border-radius:8px;font-size:12px" onclick="renderSettings()">✕</button>'
+    + '</div>';
+  document.getElementById('edit-input-' + id).focus();
+}
+
+function saveEdit(type, i, id) {
+  var newName = document.getElementById('edit-input-' + id).value.trim();
+  if (!newName) return showToast('⚠️ 名前を入力してください');
+  var list = type === 'vehicle' ? appData.vehicles : appData.users;
+  if (list.indexOf(newName) !== -1 && list[i] !== newName) return showToast('⚠️ 同じ名前が既にあります');
+  list[i] = newName;
+  var saveFn   = type === 'vehicle' ? 'saveVehicles' : 'saveUsers';
+  var jsonStr  = JSON.stringify(list);
+  google.script.run
+    .withSuccessHandler(function() {
+      renderSettings();
+      if (type === 'vehicle') renderVehicles(); else renderUsers();
+      showToast('✅ 名前を変更しました');
+    })
+    .withFailureHandler(function(err) { showToast('⚠️ 保存失敗: ' + err.message); })
+    [saveFn](jsonStr);
+}
+
+function addVehicle() {
+  var name = document.getElementById('new-vehicle').value.trim();
+  if (!name) return;
+  if (appData.vehicles.indexOf(name) !== -1) return showToast('⚠️ 同じ名前が既にあります');
+  appData.vehicles.push(name);
+  google.script.run
+    .withSuccessHandler(function() {
+      document.getElementById('new-vehicle').value = '';
+      renderSettings(); renderVehicles();
+      showToast('🚗 車両を追加しました');
+    })
+    .withFailureHandler(function(err) {
+      appData.vehicles.pop();
+      showToast('⚠️ 保存失敗: ' + err.message);
+    })
+    .saveVehicles(JSON.stringify(appData.vehicles));
+}
+
+function deleteVehicle(i) {
+  var removed = appData.vehicles.splice(i, 1);
+  google.script.run
+    .withSuccessHandler(function() { renderSettings(); renderVehicles(); })
+    .withFailureHandler(function(err) {
+      appData.vehicles.splice(i, 0, removed[0]);
+      showToast('⚠️ 削除失敗: ' + err.message);
+    })
+    .saveVehicles(JSON.stringify(appData.vehicles));
+}
+
+function addUser() {
+  var name = document.getElementById('new-user').value.trim();
+  if (!name) return;
+  if (appData.users.indexOf(name) !== -1) return showToast('⚠️ 同じ名前が既にあります');
+  appData.users.push(name);
+  google.script.run
+    .withSuccessHandler(function() {
+      document.getElementById('new-user').value = '';
+      renderSettings(); renderUsers();
+      showToast('👤 ユーザーを追加しました');
+    })
+    .withFailureHandler(function(err) {
+      appData.users.pop();
+      showToast('⚠️ 保存失敗: ' + err.message);
+    })
+    .saveUsers(JSON.stringify(appData.users));
+}
+
+function deleteUser(i) {
+  var removed = appData.users.splice(i, 1);
+  google.script.run
+    .withSuccessHandler(function() { renderSettings(); renderUsers(); })
+    .withFailureHandler(function(err) {
+      appData.users.splice(i, 0, removed[0]);
+      showToast('⚠️ 削除失敗: ' + err.message);
+    })
+    .saveUsers(JSON.stringify(appData.users));
+}
+
+// ============================================================
+//  画面切替
+// ============================================================
+function showScreen(name) {
+  document.querySelectorAll('.screen').forEach(function(s) { s.classList.remove('active'); });
+  document.querySelectorAll('.nav-btn').forEach(function(b) { b.classList.remove('active'); });
+  document.getElementById('screen-' + name).classList.add('active');
+  document.getElementById('nav-'    + name).classList.add('active');
+  if (name === 'history')  renderHistory();
+  if (name === 'settings') renderSettings();
+  if (name === 'input')    { renderVehicles(); renderUsers(); }
+}
+
+// ============================================================
+//  ユーティリティ
+// ============================================================
+var toastTimer;
+function showToast(msg) {
+  var t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(function() { t.classList.remove('show'); }, 2500);
+}
+
+// onclick内でシングルクォートが壊れないようにエスケープ
+function esc(s) {
+  return String(s).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+}
+</script>
+</body>
+</html>
